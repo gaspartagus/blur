@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Rotate the World</title>
+<style>
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.foreground {
+  fill: none;
+  stroke: #000;
+  stroke-width: 1px;
+  pointer-events: all;
+  cursor: -webkit-grab;
+  cursor: -moz-grab;
+}
+
+.foreground.zooming {
+  cursor: -webkit-grabbing;
+  cursor: -moz-grabbing;
+}
+
+.graticule {
+  fill: none;
+  stroke: #636B62;
+  stroke-width: .5px;
+  stroke-dasharray: 2,2;
+}
+
+.land {
+  fill: rgba(255, 176, 103, 0.38);
+  stroke: none;
+}
+
+.mesh {
+  stroke: #50576A;
+  stroke-width: .5px;
+  fill: none;
+}
+
+.point {
+  fill: #f00;
+}
+.line {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.38);
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+.villes {
+  fill: rgba(235, 32, 32, 0.47);
+  stroke: none;
+}
+
+.objet{
+  opacity: 0.5;
+  stroke: rgb(166, 233, 255);
+  stroke-width: 3px;
+  fill: rgb(0, 192, 255);
+}
+.image{
+  opacity: 0.5;
+  stroke-width: 4px;
+  stroke: rgb(0, 192, 255);
+  stroke-linecap: round;
+}
+.focus{
+  stroke: rgb(0, 160, 0);
+}
+
+#scene{
+  z-index: 0;
+  position: relative;
+  width: 100%;
+  height: 60%;
+}
+#scene img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 100%;
+}
+#focus{
+  z-index: 2;
+}
+</style>
+
+
+<input id="focus" type="range" value="4" min="1" max="9" step="0.1"/>
+<!-- <div id="map"></div>
+ --><div id="scene">
+  <img data-distance="10000000" id="montagne" src="montagne.jpeg">
+  <img data-distance="10000" id="web" src="bn.png" width="50%">
+  <img data-distance="100" id="web" src="web.png" width="100%">
+</div>
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script src="d3.min.js"></script>
+<script>
+
+// Units are: pixels, millimeters.
+function draw() {
+  var blurScale = 1000/5; // 1000px: la page web / 5mm : le capteur ccd
+  var svgScale = 30/5; // 150px: la hauteur sur le dessin svg / 5mm : le capteur ccd
+
+  var width = 1000,
+      height = 500,
+      middle = height/2;
+
+  var lineFunction = d3.svg.line()
+                             .x(function(d) { return d.x; })
+                             .y(function(d) { return d.y; })
+                             .interpolate("linear");
+
+  $("#map").html("");
+  var svg = d3.selectAll("#map")
+    .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+  // Construction des lignes principales
+
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": 0, "y": middle}, { "x": 1000, "y": middle}]))
+      .attr("class","line");
+
+  var ouverture = 10*svgScale, // mm
+      lensOrigin = 100; // px
+
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin, "y": middle+ouverture/2}, { "x": lensOrigin, "y": middle-ouverture/2}]))
+      .attr("class","line");
+
+  // Focale
+
+  var f = 25*svgScale, // mm
+      tickSize = 20; // px
+
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin+f, "y": middle+tickSize/2}, { "x": lensOrigin+f, "y": middle-tickSize/2}]))
+      .attr("class","line");
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin-f, "y": middle+tickSize/2}, { "x": lensOrigin-f, "y": middle-tickSize/2}]))
+      .attr("class","line");
+
+  // Ecran
+  var focus = Math.pow(10,parseInt($('#focus').val())),
+  // var focus = 10000000*svgScale, // mm
+      D = focus*f/(focus-f),
+      ecran = 15*svgScale; // mm
+
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin+D, "y": middle+ecran/2}, { "x": lensOrigin+D, "y": middle-ecran/2}]))
+      .attr("class","line");
+
+  svg.append("path")
+      .attr("d",lineFunction([
+        { "x": lensOrigin-focus, "y": middle+tickSize/2},
+        { "x": lensOrigin-focus, "y": middle-tickSize/2}]))
+      .attr("class","image focus");
+
+
+
+  var objet = 1000000*svgScale, // mm
+      OAprime = objet*f/(objet-f),
+      dprime = D - OAprime,
+      rprime = ouverture*dprime/OAprime;
+
+  function blur(dist) {
+    var objet = dist*svgScale, // mm
+    OAprime = objet*f/(objet-f),
+    dprime = D - OAprime,
+    rprime = ouverture*dprime/OAprime;
+    return rprime/svgScale*blurScale;
+  }
+
+
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin-objet, "y": middle},
+                              { "x": lensOrigin, "y": middle+ouverture/2},
+                              { "x": lensOrigin+OAprime, "y": middle},
+                              { "x": lensOrigin+D, "y": middle-rprime/2}]))
+      .attr("class","graticule");
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin-objet, "y": middle},
+                              { "x": lensOrigin, "y": middle-ouverture/2},
+                              { "x": lensOrigin+OAprime, "y": middle},
+                              { "x": lensOrigin+D, "y": middle+rprime/2}]))
+      .attr("class","graticule");
+
+  svg.append("path")
+      .attr("d",lineFunction([{ "x": lensOrigin+D, "y": middle+rprime/2},
+                              { "x": lensOrigin+D, "y": middle-rprime/2}]))
+      .attr("class","image");
+
+  svg.append("svg:circle")
+      .attr("cy", middle)
+      .attr("cx", lensOrigin-objet)
+      .attr("r", 8)
+      .attr("class", "objet");
+
+  $('img').each(function(index,img) {
+    var dist = parseInt( $(img).attr('data-distance') );
+    var blurSize = blur(dist);
+    console.log(dist,blurSize,$(img).attr('data-distance'))
+    $(img).css('-webkit-filter','blur('+ Math.abs(blurSize) +'px)')
+  });
+}
+draw();
+$('#focus').on('change',draw);
+// $('#montagne').css('-webkit-filter','blur('+ Math.abs(rprime/svgScale*blurScale) +'px)')
+
+</script>
